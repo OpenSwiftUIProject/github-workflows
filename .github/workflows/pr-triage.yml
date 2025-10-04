@@ -1,0 +1,85 @@
+name: PR Triage
+on:
+  workflow_call:
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+        # Note: This secret is configured at the organization level and automatically
+        # inherited when using 'secrets: inherit' in the calling workflow
+  # The following trigger is commented out since this is a reusable workflow.
+  # Uncomment it if you want to use this workflow directly in this repository.
+  # pull_request:
+  #   types: [opened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  triage-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Triage PR with Claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            You're a pull request triage assistant for GitHub PRs. Your task is to analyze the PR and select appropriate labels from the provided list.
+
+            IMPORTANT: Don't post any comments or messages to the PR. Your only action should be to apply labels.
+
+            PR Information:
+            - REPO: ${{ github.repository }}
+            - PR_NUMBER: ${{ github.event.pull_request.number }}
+
+            TASK OVERVIEW:
+
+            1. First, fetch the list of labels available in this repository by running: `gh label list`. Run exactly this command with nothing else.
+
+            2. Next, use the GitHub tools to get context about the PR:
+               - You have access to these tools:
+                 - mcp__github__get_pull_request: Use this to retrieve the current PR's details including title, description, and existing labels
+                 - mcp__github__get_pull_request_comments: Use this to read any discussion or additional context provided in the comments
+                 - mcp__github__update_pull_request: Use this to apply labels to the PR (do not use this for commenting)
+                 - mcp__github__search_pull_requests: Use this to find similar PRs that might provide context for proper categorization
+                 - mcp__github__list_pull_requests: Use this to understand patterns in how other PRs are labeled
+               - Start by using mcp__github__get_pull_request to get the PR details
+
+            3. Analyze the PR content, considering:
+               - The PR title and description
+               - The type of changes (bug fix, feature, refactoring, documentation, etc.)
+               - Technical areas affected
+               - Size/scope of changes
+               - Components modified
+               - Breaking changes
+
+            4. Select appropriate labels from the available labels list provided above:
+               - Choose labels that accurately reflect the PR's nature
+               - Be specific but comprehensive
+               - Select priority labels if you can determine urgency (high-priority, med-priority, or low-priority)
+               - Consider platform labels (android, ios) if applicable
+               - If you find similar PRs using mcp__github__search_pull_requests, use consistent labeling
+
+            5. Apply the selected labels:
+               - Use mcp__github__update_pull_request to apply your selected labels
+               - DO NOT post any comments explaining your decision
+               - DO NOT communicate directly with users
+               - If no labels are clearly applicable, do not apply any labels
+
+            IMPORTANT GUIDELINES:
+            - Be thorough in your analysis
+            - Only select labels from the provided list above
+            - DO NOT post any comments to the PR
+            - Your ONLY action should be to apply labels using mcp__github__update_pull_request
+            - It's okay to not add any labels if none are clearly applicable
+
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          claude_args: |
+            --allowedTools "Bash(gh label list),mcp__github__get_pull_request,mcp__github__get_pull_request_comments,mcp__github__update_pull_request,mcp__github__search_pull_requests,mcp__github__list_pull_requests"
