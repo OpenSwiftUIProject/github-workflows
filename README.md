@@ -56,6 +56,8 @@ jobs:
 
 ## Requirements
 
-The following organization or repository secrets must be configured:
-- `CLAUDE_CODE_OAUTH_TOKEN`: OAuth token for Claude Code functionality (get it from [Claude Code OAuth](https://console.anthropic.com/settings/oauth))
+The following secrets are required:
+- `CLAUDE_CODE_OAUTH_TOKEN`: OAuth token for Claude Code functionality
+  - **Already configured** at the organization level for all OpenSwiftUI Project repositories
+  - No per-repository configuration needed
 - `GITHUB_TOKEN`: Automatically provided by GitHub Actions

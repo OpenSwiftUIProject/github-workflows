@@ -5,6 +5,8 @@ on:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN:
         required: true
+        # Note: This secret is configured at the organization level and automatically
+        # inherited when using 'secrets: inherit' in the calling workflow
   # The following triggers are commented out since this is a reusable workflow.
   # Uncomment them if you want to use this workflow directly in this repository.
   # issue_comment:
