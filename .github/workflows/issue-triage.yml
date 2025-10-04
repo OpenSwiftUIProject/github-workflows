@@ -14,13 +14,14 @@ on:
   # issues:
   #   types: [opened]
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   triage-issue:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      issues: write
 
     steps:
       - name: Checkout repository
