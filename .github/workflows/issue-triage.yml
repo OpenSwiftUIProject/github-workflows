@@ -6,8 +6,10 @@ on:
         required: true
       GITHUB_TOKEN:
         required: true
-  issues:
-    types: [opened]
+  # The following trigger is commented out since this is a reusable workflow.
+  # Uncomment it if you want to use this workflow directly in this repository.
+  # issues:
+  #   types: [opened]
 
 jobs:
   triage-issue:

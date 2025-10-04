@@ -14,16 +14,48 @@ Automated issue triage workflow that uses Claude to analyze and label new issues
 
 These workflows are designed to be used as reusable workflows across all repositories in the OpenSwiftUIProject organization.
 
-To use these workflows in your repository, reference them in your workflow files:
+### Using claude.yml
+
+Create `.github/workflows/claude.yml` in your repository:
 
 ```yaml
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
 jobs:
-  call-shared-workflow:
+  claude:
     uses: OpenSwiftUIProject/github-workflows/.github/workflows/claude.yml@main
+    secrets: inherit
+```
+
+### Using issue-triage.yml
+
+Create `.github/workflows/issue-triage.yml` in your repository:
+
+```yaml
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage-issue:
+    uses: OpenSwiftUIProject/github-workflows/.github/workflows/issue-triage.yml@main
     secrets: inherit
 ```
 
 ## Requirements
 
 The following organization or repository secrets must be configured:
-- `ANTHROPIC_API_KEY`: API key for Claude Code functionality
+- `CLAUDE_CODE_OAUTH_TOKEN`: OAuth token for Claude Code functionality (get it from [Claude Code OAuth](https://console.anthropic.com/settings/oauth))
+- `GITHUB_TOKEN`: Automatically provided by GitHub Actions
