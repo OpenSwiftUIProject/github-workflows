@@ -6,9 +6,6 @@ on:
         required: true
         # Note: This secret is configured at the organization level and automatically
         # inherited when using 'secrets: inherit' in the calling workflow
-      GITHUB_TOKEN:
-        required: true
-        # Note: This is automatically provided by GitHub Actions
   # The following trigger is commented out since this is a reusable workflow.
   # Uncomment it if you want to use this workflow directly in this repository.
   # issues:
