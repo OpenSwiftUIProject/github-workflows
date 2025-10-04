@@ -31,6 +31,13 @@ on:
   pull_request_review:
     types: [submitted]
 
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+  id-token: write
+  actions: read
+
 jobs:
   claude:
     uses: OpenSwiftUIProject/github-workflows/.github/workflows/claude.yml@main
@@ -47,6 +54,10 @@ name: Issue Triage
 on:
   issues:
     types: [opened]
+
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   triage-issue:
