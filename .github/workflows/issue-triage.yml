@@ -1,5 +1,11 @@
 name: Issue Triage
 on:
+  workflow_call:
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: true
+      GITHUB_TOKEN:
+        required: true
   issues:
     types: [opened]
 
