@@ -60,4 +60,5 @@ The following secrets are required:
 - `CLAUDE_CODE_OAUTH_TOKEN`: OAuth token for Claude Code functionality
   - **Already configured** at the organization level for all OpenSwiftUI Project repositories
   - No per-repository configuration needed
+  - To obtain a new token (for org admins), run `claude setup-token` in your terminal
 - `GITHUB_TOKEN`: Automatically provided by GitHub Actions
