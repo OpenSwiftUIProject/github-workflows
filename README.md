@@ -76,7 +76,7 @@ Create `.github/workflows/pr-triage.yml` in your repository:
 name: PR Triage
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened]
 
 permissions:
@@ -88,6 +88,8 @@ jobs:
     uses: OpenSwiftUIProject/github-workflows/.github/workflows/pr-triage.yml@main
     secrets: inherit
 ```
+
+**Note:** Using `pull_request_target` ensures the workflow has write permissions to add labels to PRs from forks.
 
 ## Requirements
 
