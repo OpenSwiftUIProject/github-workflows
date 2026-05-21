@@ -1,16 +1,16 @@
 name: PR Triage
+
 on:
   workflow_call:
     inputs:
       pr_number:
-        description: 'PR number to triage (optional, auto-detected from event)'
+        description: "PR number to triage (optional, auto-detected from event)"
         required: false
         type: number
     secrets:
-      CLAUDE_CODE_OAUTH_TOKEN:
+      COPILOT_GITHUB_TOKEN:
         required: true
-        # Note: This secret is configured at the organization level and automatically
-        # inherited when using 'secrets: inherit' in the calling workflow
+        description: "Fine-grained PAT from a GitHub user with a Copilot license and Copilot Requests permission"
   # The following trigger is commented out since this is a reusable workflow.
   # Uncomment it if you want to use this workflow directly in this repository.
   # pull_request:
@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
   pull-requests: write
 
 jobs:
@@ -26,66 +27,113 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
+          node-version: 22
 
-      - name: Triage PR with Claude
-        continue-on-error: true
-        uses: anthropics/claude-code-action@v1
-        with:
-          prompt: |
-            You're a pull request triage assistant for GitHub PRs. Your task is to analyze the PR and select appropriate labels from the provided list.
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
 
-            IMPORTANT: Don't post any comments or messages to the PR. Your only action should be to apply labels.
+      - name: Collect PR context
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
 
-            PR Information:
-            - REPO: ${{ github.repository }}
-            - PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+          gh label list \
+            --repo "$GITHUB_REPOSITORY" \
+            --limit 200 \
+            --json name,description \
+            > labels.json
 
-            TASK OVERVIEW:
+          gh pr view "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json number,title,body,files,labels,author,baseRefName,headRefName,isDraft,state,url \
+            > pr.json
 
-            1. First, fetch the list of labels available in this repository by running: `gh label list`. Run exactly this command with nothing else.
+      - name: Select labels with Copilot
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
 
-            2. Next, use the GitHub tools to get context about the PR:
-               - You have access to these tools:
-                 - mcp__github__get_pull_request: Use this to retrieve the current PR's details including title, description, and existing labels
-                 - mcp__github__get_pull_request_comments: Use this to read any discussion or additional context provided in the comments
-                 - mcp__github__search_pull_requests: Use this to find similar PRs that might provide context for proper categorization
-                 - mcp__github__list_pull_requests: Use this to understand patterns in how other PRs are labeled
-               - Start by using mcp__github__get_pull_request to get the PR details
+          copilot -s \
+            --no-ask-user \
+            --allow-tool=read \
+            -p "$(cat <<'PROMPT'
+          You are a GitHub pull request label triage assistant.
 
-            3. Analyze the PR content, considering:
-               - The PR title and description
-               - The type of changes (bug fix, feature, refactoring, documentation, etc.)
-               - Technical areas affected
-               - Size/scope of changes
-               - Components modified
-               - Breaking changes
+          Read ./pr.json and ./labels.json.
 
-            4. Select appropriate labels from the available labels list provided above:
-               - Choose labels that accurately reflect the PR's nature
-               - Be specific but comprehensive
-               - Select priority labels if you can determine urgency (high-priority, med-priority, or low-priority)
-               - Consider platform labels (android, ios) if applicable
-               - If you find similar PRs using mcp__github__search_pull_requests, use consistent labeling
+          Select labels that accurately describe the PR. Use only label names that already exist in labels.json.
+          Do not invent labels. Do not comment on the PR. Do not ask questions.
 
-            5. Apply the selected labels:
-               - Use the gh CLI command to add labels: `gh pr edit <PR_NUMBER> --add-label "label1" --add-label "label2"`
-               - You can add multiple labels in a single command
-               - DO NOT post any comments explaining your decision
-               - DO NOT communicate directly with users
-               - If no labels are clearly applicable, do not apply any labels
+          Prefer this taxonomy when the labels exist:
+          - type: bug, type: feature, type: docs, type: build, type: ci, type: tests, type: maintenance, type: question
+          - area:* labels for affected subsystem
+          - platform:* labels only when the change is platform-specific
+          - priority:* only when priority is explicit in the PR metadata
+          - impact:* only for clear user-visible impact such as crash, memory leak, or visual diff
+          - status:* only if already present or explicitly justified by the PR metadata
 
-            IMPORTANT GUIDELINES:
-            - Be thorough in your analysis
-            - Only select labels from the provided list above
-            - DO NOT post any comments to the PR
-            - Your ONLY action should be to apply labels using the `gh pr edit` command
-            - It's okay to not add any labels if none are clearly applicable
+          Use the PR title, body, existing labels, and changed file paths.
+          If unsure, choose fewer labels.
 
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          claude_args: |
-            --allowedTools "Bash,mcp__github__get_pull_request,mcp__github__get_pull_request_files,mcp__github__get_pull_request_comments,mcp__github__search_pull_requests,mcp__github__list_pull_requests"
+          Output only a JSON array of label names, for example:
+          ["type: feature","area: rendering"]
+          PROMPT
+          )" > copilot-output.txt
+
+          python3 <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          raw = Path("copilot-output.txt").read_text()
+          labels = {label["name"] for label in json.loads(Path("labels.json").read_text())}
+          pr = json.loads(Path("pr.json").read_text())
+          existing = {label["name"] for label in pr.get("labels", [])}
+
+          try:
+              parsed = json.loads(raw)
+          except json.JSONDecodeError:
+              match = re.search(r"```(?:json)?\s*(\[[\s\S]*?\])\s*```", raw)
+              if match is None:
+                  match = re.search(r"(\[[\s\S]*\])", raw)
+              if match is None:
+                  raise SystemExit(f"Copilot output did not contain a JSON array:\n{raw}")
+              parsed = json.loads(match.group(1))
+
+          if not isinstance(parsed, list):
+              raise SystemExit(f"Copilot output must be a JSON array, got: {type(parsed).__name__}")
+
+          selected = []
+          for label in parsed:
+              if not isinstance(label, str):
+                  continue
+              if label in labels and label not in existing and label not in selected:
+                  selected.append(label)
+
+          Path("selected-labels.json").write_text(json.dumps(selected, indent=2) + "\n")
+          print(json.dumps(selected))
+          PY
+
+      - name: Apply labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number || github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          if [ "$(jq 'length' selected-labels.json)" -eq 0 ]; then
+            echo "No new labels selected."
+            exit 0
+          fi
+
+          jq -r '.[]' selected-labels.json | while IFS= read -r label; do
+            gh pr edit "$PR_NUMBER" \
+              --repo "$GITHUB_REPOSITORY" \
+              --add-label "$label"
+          done
