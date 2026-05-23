@@ -24,6 +24,9 @@ jobs:
   triage-issue:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
 
     steps:
       - name: Set up Node.js
@@ -132,8 +135,8 @@ jobs:
             exit 0
           fi
 
-          jq -r '.[]' selected-labels.json | while IFS= read -r label; do
-            gh issue edit "$ISSUE_NUMBER" \
-              --repo "$GITHUB_REPOSITORY" \
-              --add-label "$label"
-          done
+          labels="$(jq -c '{labels: .}' selected-labels.json)"
+          gh api \
+            --method POST \
+            "/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/labels" \
+            --input - <<< "$labels"
